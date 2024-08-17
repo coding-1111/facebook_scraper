@@ -1,0 +1,342 @@
+#!/user/bin/python3
+# -*- coding: utf-8 -*-
+
+"""
+    Selenium Facebook Scraper.
+    author: Mhmd-Hisham  (gtihub)
+    author: AdhamGhoname (github)
+
+    Licensed under the GNU General Public License Version 3 (GNU GPL v3)
+        available at: http://www.gnu.org/licenses/gpl-3.0.txt
+
+"""
+
+import sys
+import time
+import json, csv, re
+import argparse, getpass
+
+from bs4 import BeautifulSoup
+
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+def opt_parser():
+    """Parse command-line options."""
+    # verbose, headless, json, csv, html, htmlpage, loginfile
+    parser = argparse.ArgumentParser(description="Use Selenium & Firefox to automate Facebook login and scrape user's friend list.",
+                                     formatter_class=lambda prog: argparse.RawTextHelpFormatter(prog, width=99))
+    parser.add_argument("-v", "--verbose", help="Increase verbosity level.", action="store_true", default=False, dest="verbose")
+    parser.add_argument("-b", "--headless", help="Activate headless mode, run firefox in the background.", action="store_true", default=False, dest="headless")
+    parser.add_argument("-t", "--timeout", help="Time to wait for elements to load on webpages before giving up. (30s)", type=int, default=120, dest="timeout")
+    parser.add_argument("-j", "--json", help="Export user's friend list in JSON format. (default)", default=True, action="store_true", dest="json")
+    parser.add_argument("-c", "--csv", help="Export user's friend list in CSV format.", default=False, action="store_true", dest="csv")
+    parser.add_argument("-s", "--html", help="Export the source html page.", default=False, action="store_true", dest="html")
+    parser.add_argument("-i", "--import-html", help="Import data from source html page.", default=None, dest="htmlpage")
+    parser.add_argument("-l", "--login-data", help="Read login data from file.", default=None, dest="loginfile")
+    return parser.parse_args()
+
+def check_page_loaded(driver):
+    """Check whether the page is loaded or not. """
+    try:
+        existing = False
+        elements = driver.find_elements_by_class_name("uiHeaderTitle")
+
+        for element in elements:
+            if (element.get_attribute('innerHTML') == "More About You"):
+                existing = True
+
+        return existing
+
+    except:
+
+        return False
+
+def sec_to_hms(sec):
+    """ Convert seconds to hh:mm:ss format. """
+    h = sec / 3600
+    sec %= 3600
+
+    m = sec / 60
+    sec %= 60
+
+#    return '%02d:%02d:%02d' % (h, m, sec)
+    return '{:02}:{:02}:{:02}'.format(int(h), int(m), int(sec))
+
+def export_as_csv(names, ids, filename):
+    """Export user's friend list in CSV format. """
+
+    with open(filename, mode='w+', encoding='utf-8') as ffile:
+        writer = csv.writer(ffile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(['Name', 'Facebook profile id'])
+
+        for i in range(len(ids)):
+            writer.writerow([ids[i], names[i][0], names[i][1]])
+
+    return filename
+
+def export_as_html(htmlpage, filename):
+    """Export user's friend list source html page. """
+    with open(filename, "w+", encoding="utf-8") as htmlfile:
+        htmlfile.write(htmlpage)
+
+    return filename
+
+def export_as_json(names, ids, filename):
+    """Export user's friend list in JSON format. """
+    data = dict()
+    data["number of friends"] = len(ids)
+    data["friends"] = dict(zip(ids, names))
+
+    with open(filename, "w+", encoding='utf-8') as jsonfile:
+        json.dump(data, jsonfile, indent=4)
+
+    return filename
+
+def import_from_htmlfile(path_to_htmlfile):
+    """Import friend list from htmlfile downloaded from a web browser. """
+    with open(path_to_htmlfile, "r", encoding="utf-8") as htmlfile:
+        htmlpage = htmlfile.read()
+
+    return htmlpage
+
+def get_login_data_from_stdin():
+    """ Get login data from stdin. """
+    print("Facebook Login:- ")
+    user = input("Enter e-mail address or phone number: ")
+    password = getpass.getpass("Enter password: ")
+
+    return user, password
+
+def get_login_data_from_file(filename):
+    with open(filename, "r", encoding="utf-8") as login_file:
+        lines = login_file.readlines()
+
+    # Ensure there are at least two lines in the file
+    if len(lines) >= 2:
+        user = lines[0].strip()  # Read the first line and remove any extra whitespace
+        password = lines[1].strip()  # Read the second line and remove any extra whitespace
+        return user, password
+    else:
+        raise ValueError("File must contain at least two lines")
+
+
+def automate(driver, user, password, timeout=120, verbose=False):
+    """ Automate user interaction using selenium and return html source page."""
+    wait = WebDriverWait(driver, timeout)
+    facebook_url = "https://www.facebook.com/login.php"
+    
+    if verbose:
+        print("GET", facebook_url)
+    
+    driver.get(facebook_url)
+
+    elem = wait.until(EC.presence_of_element_located((By.ID, "email")))
+    
+    if verbose:
+        print("Entering email... ")
+    
+    elem.send_keys(user)
+
+    elem =  wait.until(EC.presence_of_element_located((By.ID, "pass")))
+    print(user, password)
+    if verbose:
+        print("Entering password... ")
+        print("Sending data... ")
+
+    elem.send_keys(password)
+    elem.send_keys(Keys.RETURN)
+
+    # if verbose:
+    #     print("Waiting for elements to load... timeout={0}".format(timeout))
+
+    # element = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="mount_0_0_bB"]/div/div[1]/div/div[3]/div/div/div[1]/div[1]/div/div[2]/div/div/div[2]/div/div/div/div[1]/div[2]/div/div/div')))    
+    # # Wait for the element to be clickable
+    # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="mount_0_0_bB"]/div/div[1]/div/div[3]/div/div/div[1]/div[1]/div/div[2]/div/div/div[2]/div/div/div/div[1]/div[2]/div/div/div')))    
+    # wait.until(EC.element_to_be_clickable((By.XPATH, '//*[@id="mount_0_0_bB"]/div/div[1]/div/div[3]/div/div/div[1]/div[1]/div/div[2]/div/div/div[2]/div/div/div/div[1]/div[2]/div/div/div')))
+
+    time.sleep(10)
+
+    if verbose:
+        print("GET https://www.facebook.com/profile.php")
+
+    driver.get("https://www.facebook.com/profile.php")
+
+    while (driver.current_url == "https://www.facebook.com/profile.php"):
+        time.sleep(0.02)
+    
+    # url = (driver.current_url[0:-2] if "#_" == driver.current_url[-2:] else driver.current_url) + "friends"
+    url = "https://www.facebook.com/friends/list"
+    if verbose:
+        print("GET", url)
+
+    driver.get(url)
+    if verbose:
+        print("Scroling down... ")
+
+    # Wait for the friend list elements to be present
+    # wait.until(EC.presence_of_element_located((By.XPATH, '//div[contains(text(), "Friends")]')))
+    time.sleep(60)
+
+    # Scroll down to ensure all friends are loaded (adjust scrolling strategy as needed)
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2)  # Adjust sleep time as necessary
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height    
+
+    # print(driver.page_source)
+    return driver.page_source
+
+def get_source_htmlpage(options):
+    """Start the program and handle command line options"""
+
+    if options.loginfile:
+        try:
+            user, password = get_login_data_from_file(options.loginfile)
+        except Exception as Error:
+            print(Error)
+
+            if 'y' in input("Do you want to get login data from stdout?(y/n) ").lower():
+                user, password = get_login_data_from_stdin()
+
+            else:
+                sys.exit(0)
+    else:
+        user, password = get_login_data_from_stdin()
+
+    if options.verbose:
+        start_time = time.time()
+        print("Running Firefox... ")
+
+
+    firefox_options = Options()
+    # firefox_options.add_argument("--headless") 
+    # firefox_options.set_headless(headless=options.headless)
+
+    ffprofile = webdriver.FirefoxProfile()
+    firefox_options.profile = ffprofile
+    # ffprofile.set_preference("dom.webnotifications.enabled", False)
+    driver = webdriver.Firefox(options=firefox_options)
+
+    htmlpage = automate(driver, user, password, verbose=options.verbose, timeout=options.timeout)
+
+    # driver.quit()
+
+    if options.verbose:
+        print("Done downloading!.. ({0})\n".format( sec_to_hms(time.time() - start_time)) )
+
+    return htmlpage
+
+# def extract_friend_list(htmlpage):
+#     """
+#         Extract user's friend list from html page using regex expressions only.
+#         This function should be removed soon.
+#     """
+    
+#     ids = re.findall('friend_list_item.+?data-profileid="(.+?)"', htmlpage)
+#     names = re.findall('friend_list_item.+?aria-label="(.+?)"', htmlpage)
+
+#     return names, ids
+
+def extract_friend_list(htmlpage):
+    """Extract user's friend list from html page using BeautifulSoup."""
+    soup = BeautifulSoup(htmlpage, "html.parser")
+    
+    names = []
+    ids = []
+
+    # Find the container that holds the friend list
+    # Example: Look for all anchor tags with href containing 'profile.php?id='
+    friend_list_items = soup.find_all("a", href=True)
+    
+    for item in friend_list_items:
+        try:
+            href = item['href']
+            # Check if the href contains profile.php?id=
+            if 'profile.php?id=' in href:
+                name = item.get_text(strip=True)
+                fb_id = re.findall("profile\\.php\\?id=(\\d+)", href)[0]
+                names.append(name)
+                ids.append(fb_id)
+        except Exception as e:
+            print(f"Error extracting data: {e}")
+
+    return names, ids
+
+
+
+def main():
+    # verbose, headless, json, csv, html, htmlpage, loginfile, timeout
+    options = opt_parser()
+
+    if options.htmlpage:
+        try:
+            htmlpage = import_from_htmlfile(options.htmlpage)
+
+        except Exception as error:
+            print(error)
+
+            if 'y' in input("Do you want to scrape data online?(y/n) ").lower():
+                htmlpage = get_source_htmlpage(options)
+
+            else:
+                return 0
+
+    else:
+        htmlpage = get_source_htmlpage(options)
+
+    if options.verbose:
+        print("Processing data... ")
+
+    # print(htmlpage)
+    names, ids = extract_friend_list(htmlpage)
+    print(names, ids)
+    filename = 'facebook friends from {0}'.format(time.strftime("%Y-%m-%d %H-%M-%S"))
+
+    if (len(names) != len(ids)):
+        print("Unexpected error!..")
+        print("Please send us your source html file.")
+        print("kindly file an issue in our repository on github so we can fix this bug.")
+        print("Github repository: https://github.com/Mhmd-Hisham/selenium_facebook_scraper.git")
+        if options.html == False:
+            if 'y' in input("Do you want to export the html page and send it manually?(y/n) ").lower():
+                options.html = True
+                print("Thank you for your support. ")
+
+    print("{0} friends found!".format(len(ids)))
+
+    if options.json:
+        print("Exporting data as json file... ", end="", flush=True)
+        export_as_json(names, ids, filename + ".json")
+        print("Done. File: '{0}'.json".format(filename))
+
+    if options.csv:
+        print("Exporting data as csv file... ", end="", flush=True)
+        export_as_csv(names, ids, filename + ".csv")
+        print("Done. File: '{0}'.csv".format(filename))
+
+    if options.html:
+        print("Exporting source html page... ", end="", flush=True)
+        export_as_html(htmlpage, filename + ".html")
+        print("Done. File: '{0}'.html".format(filename))
+
+    if 'y' in input("Print data to stdout?(y/n) ").lower():
+        for i in range(len(ids)):
+           print(names[i][0],"[Deactivated]" if names[i][1] else '', ":", ids[i])
+
+if __name__ == "__main__":
+    try:
+        main()
+
+    except KeyboardInterrupt:
+        print("Keyboard Interruption! exitting... ")
+
+    sys.exit(0)
