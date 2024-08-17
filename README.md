@@ -8,8 +8,6 @@ This is a simple python3 script used to download a user's friend list from faceb
 ## Usage
 ```
 user:~$ python3 facebook_scraper.py
-
-
 ```
 
 ## Requirements
@@ -25,7 +23,3 @@ pip3 install selenium
 - Firefox webbrowser.   [[Windows](https://support.mozilla.org/en-US/kb/how-download-and-install-firefox-windows), [Linux](https://support.mozilla.org/en-US/kb/install-firefox-linux), [Mac](https://support.mozilla.org/en-US/kb/how-download-and-install-firefox-mac)]
 - Geckodriver for Firefox. [[How to install](https://github.com/mozilla/geckodriver/releases/)]
 
-
-## License
-
-This project is licensed under the GNU GPLv3 License - check [LICENSE](LICENSE) for more details.
