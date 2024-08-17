@@ -7,24 +7,8 @@ This is a simple python3 script used to download a user's friend list from faceb
 
 ## Usage
 ```
-user:~$ python3 facebook_scraper.py --help
-usage: facebook_scraper.py [-h] [-v] [-b] [-t TIMEOUT] [-j] [-c] [-s] [-i HTMLPAGE] [-l LOGINFILE]
+user:~$ python3 facebook_scraper.py
 
-Use Selenium & Firefox to automate Facebook login and scrape user's friend list.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -v, --verbose         Increase verbosity level.
-  -b, --headless        Activate headless mode, run firefox in the background.
-  -t TIMEOUT, --timeout TIMEOUT
-                        Time to wait for elements to load on webpages before giving up. (30s)
-  -j, --json            Export user's friend list in JSON format. (default)
-  -c, --csv             Export user's friend list in CSV format.
-  -s, --html            Export the source html page.
-  -i HTMLPAGE, --import-html HTMLPAGE
-                        Import data from source html page.
-  -l LOGINFILE, --login-data LOGINFILE
-                        Read login data from file.
 
 ```
 
